@@ -1,0 +1,148 @@
+/* styles.css */
+
+.container {
+  display: flex;
+}
+
+#myCanvas {
+  width: 70%;
+  height: 600px;
+  background-color: #eee;
+}
+
+.sidebar {
+  width: 30%;
+  padding: 20px;
+}
+
+.custom-file-upload {
+  display: inline-block;
+  padding: 6px 12px;
+  cursor: pointer;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  transition: background-color 0.3s ease;
+}
+
+.custom-file-upload:hover {
+  background-color: #45a049;
+}
+
+.custom-file-upload i {
+  margin-right: 5px;
+}
+
+.input-file {
+  display: none;
+}
+
+/* checkbox */
+
+.switch label {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  font-size: 20px;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+input[type="checkbox"] {
+  display: none;
+}
+
+input[type="checkbox"] + label {
+  background-color: #9d0f72;
+}
+
+input[type="checkbox"]:checked + label {
+  background-color: #4caf50;
+}
+
+input[type="checkbox"] + label .checked {
+  display: none;
+}
+input[type="checkbox"] + label .unchecked {
+  display: inline;
+}
+
+input[type="checkbox"]:checked + label .checked {
+  display: inline;
+}
+input[type="checkbox"]:checked + label .unchecked {
+  display: none;
+}
+
+/* select */
+.select-wrapper {
+  position: relative;
+  display: block;
+  width: 100%;
+
+  margin-bottom: 10px;
+}
+
+.select-wrapper::after {
+  content: "\f078";
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  font-family: "FontAwesome";
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.select-wrapper select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  padding: 8px;
+  font-size: 16px;
+  line-height: 1.5;
+  border: 2px solid #9d0f72;
+  border-radius: 4px;
+  background-color: #fff;
+  color: #333;
+  cursor: pointer;
+}
+
+.select-wrapper select:focus {
+  outline: none;
+  box-shadow: 0 0 4px rgba(157, 15, 114, 0.4);
+}
+
+.select-wrapper select option {
+  background-color: #fff;
+  color: #333;
+}
+
+.function-group {
+  margin-top: 20px;
+}
+
+button {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  font-size: 16px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #45a049;
+}
+
+button:active {
+  background-color: #3e8e41;
+}

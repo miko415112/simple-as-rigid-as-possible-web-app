@@ -1,0 +1,25 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "ml-matrix": "^6.10.4",
+    "three": "^0.152.2"
+  },
+  "scripts": {
+    "server": "node server.js",
+    "deploy": "NODE_ENV=production node server.js",
+    "build": "webpack",
+    "dev": "webpack-dev-server --mode development "
+  },
+  "devDependencies": {
+    "css-loader": "^6.7.4",
+    "html-webpack-plugin": "^5.5.1",
+    "style-loader": "^3.3.3",
+    "webpack": "^5.83.1",
+    "webpack-cli": "^5.1.1",
+    "webpack-dev-server": "^4.15.0"
+  }
+}
