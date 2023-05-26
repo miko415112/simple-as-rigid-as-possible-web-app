@@ -3,6 +3,9 @@ import * as THREE from "three";
 import { TrackballControls } from "three/addons/controls/TrackballControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { preprocess, applyConstraints } from "./arap.js";
+import { Constraint } from "./Constraint";
+import { readOFFFile } from "./offLoader";
+
 /* globle variable */
 var renderer = null;
 var scene = null;
@@ -15,8 +18,8 @@ var dragging = false;
 var draggableSphere = null;
 var draggingPlane = null;
 var updating = false;
-const geometry_constraint_map = new Map();
 var lastUpdateTime = Date.now(); //ms
+const constraintsArray = [];
 
 window.addEventListener("DOMContentLoaded", init);
 function init() {
@@ -81,21 +84,24 @@ function handleFileUpload(event) {
   const file = event.target.files[0];
   const reader = new FileReader();
 
-  reader.addEventListener("load", function () {
-    const gltfLoader = new GLTFLoader();
-    const glbData = reader.result;
+  reader.addEventListener("load", () => {
+    const { positions, indices } = readOFFFile(reader.result);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setIndex(indices);
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
 
-    gltfLoader.parse(glbData, "", function (gltf) {
-      gltf.scene.traverse((node) => {
-        if (node.isMesh) {
-          scene.add(node);
-          preprocess(node.geometry);
-        }
-      });
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x990000,
+      wireframe: true,
     });
+    const mesh = new THREE.Mesh(geometry, material);
+
+    scene.add(mesh);
+
+    preprocess(mesh);
   });
 
-  reader.readAsArrayBuffer(file);
+  reader.readAsText(file);
 }
 
 function handleAddConstraint(event) {
@@ -104,68 +110,58 @@ function handleAddConstraint(event) {
   if (intersects.length == 0) return;
 
   const firstIntersect = intersects[0];
-  const target_geometry = firstIntersect.object.geometry;
-  const vertexIndex1 = firstIntersect.face.a;
-  const vertexIndex2 = firstIntersect.face.b;
-  const vertexIndex3 = firstIntersect.face.c;
+  const positionAttribute =
+    firstIntersect.object.geometry.getAttribute("position");
 
-  const positionAttribute = target_geometry.getAttribute("position");
-  const vertex1 = new THREE.Vector3();
-  vertex1.fromBufferAttribute(positionAttribute, vertexIndex1);
-  const vertex2 = new THREE.Vector3();
-  vertex2.fromBufferAttribute(positionAttribute, vertexIndex2);
-  const vertex3 = new THREE.Vector3();
-  vertex3.fromBufferAttribute(positionAttribute, vertexIndex3);
+  const v1 = new THREE.Vector3().fromBufferAttribute(
+    positionAttribute,
+    firstIntersect.face.a
+  );
+  const v2 = new THREE.Vector3().fromBufferAttribute(
+    positionAttribute,
+    firstIntersect.face.b
+  );
+  const v3 = new THREE.Vector3().fromBufferAttribute(
+    positionAttribute,
+    firstIntersect.face.c
+  );
 
-  const localPos = vertex1;
+  const localPos = calClosestPosToRayCaster([v1, v2, v3], raycaster);
   const worldPos = new THREE.Vector3()
     .copy(localPos)
     .applyMatrix4(firstIntersect.object.matrixWorld);
+  const vertexID =
+    localPos == v1
+      ? firstIntersect.face.a
+      : localPos == v2
+      ? firstIntersect.face.b
+      : firstIntersect.face.c;
 
-  const r = Math.sqrt(calTriangleArea(vertex1, vertex2, vertex3) / 3.14 / 10);
+  const r = Math.sqrt(calTriangleArea(v1, v2, v3) / 3.14 / 20);
   const geometry = new THREE.SphereGeometry(r);
   const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
   const sphere = new THREE.Mesh(geometry, material);
   sphere.position.copy(worldPos);
   scene.add(sphere);
 
-  const payload = {
-    vertexIndex: vertexIndex1,
-    sphere,
-  };
-  var old_data = geometry_constraint_map.get(target_geometry);
-  const new_data = !old_data ? [payload] : [...old_data, payload];
-  geometry_constraint_map.set(target_geometry, new_data);
+  const constraint = new Constraint(firstIntersect.object, vertexID, sphere);
+  constraintsArray.push(constraint);
 }
 
 function handleMoveConstraintStart(event) {
   const raycaster = raycasterFromMouseEvent(event);
-
-  var closestConstraintGeometry = null;
-  var closestDistance = 10000000000000;
-  var closestSphere = null;
-  var closestIndex = -1;
-  var closestPos = null;
-  geometry_constraint_map.forEach((constraintArray, geometry) => {
-    for (var i = 0; i < constraintArray.length; i++) {
-      const { vertexIndex, sphere } = constraintArray[i];
-      const distance = raycaster.ray.distanceSqToPoint(sphere.position);
-      if (distance < closestDistance) {
-        closestConstraintGeometry = geometry;
-        closestDistance = distance;
-        closestSphere = sphere;
-        closestIndex = i;
-        closestPos = sphere.position;
-      }
-    }
+  constraintsArray.sort((c_a, c_b) => {
+    const c_a_pos = new THREE.Vector3(...c_a.getWorldPos());
+    const c_b_pos = new THREE.Vector3(...c_b.getWorldPos());
+    const pos = calClosestPosToRayCaster([c_a_pos, c_b_pos], raycaster);
+    return pos == c_a_pos ? -1 : 1;
   });
-
-  if (closestIndex == -1) return;
+  const closestConstraint = constraintsArray[0];
   dragging = true;
-  draggableSphere = closestSphere;
+  draggableSphere = closestConstraint.represent_mesh;
   draggingPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(
     raycaster.ray.direction,
-    closestPos
+    new THREE.Vector3(...closestConstraint.getWorldPos())
   );
 }
 
@@ -182,39 +178,20 @@ function handleMoveConstraintStop(event) {
   draggableSphere = null;
   draggingPlane = null;
 
-  if (!updating) applyConstraints(geometry_constraint_map);
-  updating = true;
+  applyConstraints(constraintsArray);
 }
 
 function handleRemoveConstraint(event) {
   const raycaster = raycasterFromMouseEvent(event);
-
-  var closestConstraintGeometry = null;
-  var closestDistance = 10000000000000;
-  var closestSphere = null;
-  var closestIndex = -1;
-  geometry_constraint_map.forEach((constraintArray, geometry) => {
-    for (var i = 0; i < constraintArray.length; i++) {
-      const { vertexIndex, sphere } = constraintArray[i];
-      const distance = raycaster.ray.distanceSqToPoint(sphere.position);
-      if (distance < closestDistance) {
-        closestConstraintGeometry = geometry;
-        closestDistance = distance;
-        closestSphere = sphere;
-        closestIndex = i;
-      }
-    }
+  constraintsArray.sort((c_a, c_b) => {
+    const c_a_pos = new THREE.Vector3(...c_a.getWorldPos());
+    const c_b_pos = new THREE.Vector3(...c_b.getWorldPos());
+    const pos = calClosestPosToRayCaster([c_a_pos, c_b_pos], raycaster);
+    return pos == c_a_pos ? -1 : 1;
   });
-  if (closestIndex == -1) return;
-  const removed_geometry_constraints = geometry_constraint_map.get(
-    closestConstraintGeometry
-  );
-  removed_geometry_constraints.splice(closestIndex, -1);
-  geometry_constraint_map.set(
-    closestConstraintGeometry,
-    removed_geometry_constraints
-  );
-  scene.remove(closestSphere);
+  const closestConstraint = constraintsArray[0];
+  constraintsArray.splice(0, 1);
+  scene.remove(closestConstraint.represent_mesh);
 }
 
 function handleMouseDown(event) {
@@ -231,6 +208,18 @@ function handleMouseUp(event) {
 }
 
 /* utils */
+function calClosestPosToRayCaster(v_array, raycaster) {
+  var closestVertex;
+  var closestDistance = 1000000000;
+  for (var i = 0; i < v_array.length; i++) {
+    if (raycaster.ray.distanceSqToPoint(v_array[i]) < closestDistance) {
+      closestDistance = raycaster.ray.distanceSqToPoint(v_array[i]);
+      closestVertex = v_array[i];
+    }
+  }
+  return closestVertex;
+}
+
 function calTriangleArea(v1, v2, v3) {
   const a = v1.length();
   const b = v2.length();

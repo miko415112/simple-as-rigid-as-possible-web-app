@@ -1,11 +1,11 @@
-import { Matrix, SingularValueDecomposition, solve } from "ml-matrix";
+import { Matrix, SingularValueDecomposition, determinant } from "ml-matrix";
 
-const geometry_map = new Map();
-const iteration = 10;
+const mesh_map = new Map();
+const iteration = 3;
 
-export function preprocess(geometry) {
-  const verticesMatrix = getVerticesFromGeometry(geometry);
-  const adjacentList = getAdjacentListFromGeometry(geometry);
+export function preprocess(mesh) {
+  const verticesMatrix = getVerticesFromGeometry(mesh.geometry);
+  const adjacentList = getAdjacentListFromGeometry(mesh.geometry);
   const weightMatrix = getWeightFromVerticesAndNeighbor(
     verticesMatrix,
     adjacentList
@@ -14,7 +14,7 @@ export function preprocess(geometry) {
     weightMatrix,
     adjacentList
   );
-  geometry_map.set(geometry, {
+  mesh_map.set(mesh, {
     verticesMatrix,
     adjacentList,
     weightMatrix,
@@ -22,47 +22,58 @@ export function preprocess(geometry) {
   });
 }
 
-export function applyConstraints(geometry_constraint_map) {
-  geometry_constraint_map.forEach((constraintArray, geometry) => {
-    if (constraintArray.length == 0) return;
-    const newVerticesMatrix = geometry_map.get(geometry).verticesMatrix.clone();
-    const newRotationMatrix = [];
-    for (var i = 0; i < iteration; i++) {
-      calNewRotationMatrix(geometry, newVerticesMatrix, newRotationMatrix);
-      calNewVerticesMatrix(
-        constraintArray,
-        geometry,
-        newVerticesMatrix,
-        newRotationMatrix
-      );
+export function applyConstraints(constraintsArray) {
+  /* iterate each map element(mesh) */
+  mesh_map.forEach((mesh_data, mesh) => {
+    const constraints_for_this_mesh = constraintsArray.filter((constraint) => {
+      return constraint.control_mesh == mesh ? true : false;
+    });
+
+    if (constraints_for_this_mesh.length > 0) {
+      const newVerticesMatrix = mesh_data.verticesMatrix.clone();
+      const newRotationMatrix = [];
+
+      for (var i = 0; i < iteration; i++) {
+        console.log(i);
+        calNewRotationMatrix(mesh_data, newVerticesMatrix, newRotationMatrix);
+        calNewVerticesMatrix(
+          constraints_for_this_mesh,
+          mesh_data,
+          newVerticesMatrix,
+          newRotationMatrix
+        );
+      }
+      const positionsAttribute = mesh.geometry.getAttribute("position");
+      const newVertices2DArray = newVerticesMatrix.to2DArray();
+      positionsAttribute.array = new Float32Array(newVertices2DArray.flat());
+      positionsAttribute.needsUpdate = true;
     }
-    const positionsAttribute = bufferGeometry.getAttribute("position");
-    const newVertices2DArray = newVerticesMatrix.to2DArray();
-    positionsAttribute.array = new Float32Array(newVertices2DArray.flat());
-    positionsAttribute.needsUpdate = true;
   });
 }
 
-function calNewRotationMatrix(geometry, newVerticesMatrix, newRotationMatrix) {
-  const { verticesMatrix, adjacentList, weightMatrix } =
-    geometry_map.get(geometry);
+function calNewRotationMatrix(mesh_data, newVerticesMatrix, newRotationMatrix) {
+  const { verticesMatrix, adjacentList, weightMatrix } = mesh_data;
   /* calNewRotationMatrix for each vertex */
   for (var i = 0; i < verticesMatrix.rows; i++) {
     const neighbors_id = adjacentList[i];
     const P_array = [];
     const diag_array = [];
     const P_prime_array = [];
-    for (var j = 0; j < neighbors_id.length; j++) {
+
+    for (var j of neighbors_id) {
       var e_ij = verticesMatrix
         .getRowVector(i)
-        .sub(verticesMatrix.getRowVector(neighbors_id[j]));
+        .clone()
+        .sub(verticesMatrix.getRowVector(j));
+
       var e_ij_prime = newVerticesMatrix
         .getRowVector(i)
-        .sub(newVerticesMatrix.getRowVector(neighbors_id[j]));
+        .clone()
+        .sub(newVerticesMatrix.getRowVector(j));
 
       P_array.push(e_ij.to1DArray());
       P_prime_array.push(e_ij_prime.to1DArray());
-      diag_array.push(weightMatrix.get(i, neighbors_id[j]));
+      diag_array.push(weightMatrix.get(i, j));
     }
 
     const P_matrix = new Matrix(P_array).transpose();
@@ -74,19 +85,26 @@ function calNewRotationMatrix(geometry, newVerticesMatrix, newRotationMatrix) {
     const Sigma = result.diagonal;
     const U = result.leftSingularVectors;
     const V_T = result.rightSingularVectors;
-    const R = V_T.transpose().mmul(U.transpose());
-    newRotationMatrix.push(R);
+    var R = V_T.clone().transpose().mmul(U.clone().transpose());
+
+    if (determinant(R) < 0) {
+      const column = U.getColumnVector(0);
+      column.mul(-1);
+      U.setColumn(0, column);
+    }
+    R = V_T.clone().transpose().mmul(U.clone().transpose());
+    newRotationMatrix[i] = R;
   }
 }
 
 function calNewVerticesMatrix(
   constraintArray,
-  geometry,
+  mesh_data,
   newVerticesMatrix,
   newRotationMatrix
 ) {
   const { verticesMatrix, adjacentList, weightMatrix, LaplacianMatrix } =
-    geometry_map.get(geometry);
+    mesh_data;
   const vertices_num = verticesMatrix.rows;
   const constraint_num = constraintArray.length;
 
@@ -103,40 +121,37 @@ function calNewVerticesMatrix(
   }
 
   for (var i = 0; i < constraint_num; i++) {
-    const controlIndex = constraintArray[i].vertexIndex;
+    const controlIndex = constraintArray[i].control_vertexID;
     constraintLaplacianMatrix.set(vertices_num + i, controlIndex, 1);
     constraintLaplacianMatrix.set(controlIndex, vertices_num + i, 1);
   }
 
   /* cal bMatrix */
-  const bMatrix = Matrix.zeros(vertices_num + constraint_num, 1);
+  const bMatrix = Matrix.zeros(vertices_num + constraint_num, 3);
   for (var i = 0; i < vertices_num; i++) {
     const neighbors_id = adjacentList[i];
-    var b_i_value = 0;
-    for (var j = 0; j < neighbors_id.length; j++) {
-      const weight_ij = weightMatrix.get(i, neighbors_id[j]);
-      const Ri_plus_Rj = newRotationMatrix[i].add(newRotationMatrix[j]);
+    const b_i_column_vector = Matrix.zeros(3, 1);
+    for (var j of neighbors_id) {
+      const weight_ij = weightMatrix.get(i, j);
+      const Ri_plus_Rj = newRotationMatrix[i].clone().add(newRotationMatrix[j]);
       const e_ij = verticesMatrix
         .getRowVector(i)
+        .clone()
         .sub(verticesMatrix.getRowVector(j))
         .transpose();
 
-      b_i_value += Ri_plus_Rj.mmul(e_ij)
-        .mul(0.5 * weight_ij)
-        .get(0, 0);
+      b_i_column_vector.add(Ri_plus_Rj.mmul(e_ij).mul(0.5 * weight_ij));
     }
-    bMatrix.set(i, 1, b_i_value);
+    bMatrix.setRow(i, b_i_column_vector.transpose());
   }
   for (var i = 0; i < constraint_num; i++) {
-    const constrol_sphere = constraintArray[i].sphere;
-    const p_prime = constrol_sphere.worldToLocal(constrol_sphere.position);
-    bMatrix.set(i + vertices_num, 1, p_prime);
+    const constrol_pos = constraintArray[i].getLocalPos();
+    bMatrix.setRow(i + vertices_num, constrol_pos);
   }
 
   const result = new SingularValueDecomposition(
     constraintLaplacianMatrix
   ).solve(bMatrix);
-
   for (var i = 0; i < vertices_num; i++) {
     for (var j = 0; j < vertices_num; j++) {
       newVerticesMatrix.set(i, j, result.get(i, j));
@@ -192,33 +207,33 @@ function addToAdjacentList(a, b, c, adjacentList, i) {
 function getWeightFromVerticesAndNeighbor(verticesMatrix, adjacentList) {
   const weightMatrix = Matrix.zeros(verticesMatrix.rows, verticesMatrix.rows);
   for (var i = 0; i < verticesMatrix.rows; i++) {
-    for (var j = 0; j < i; j++) {
-      const vertex_i_neighbors = adjacentList[i];
+    const vertex_i_neighbors = adjacentList[i];
+    for (var j of vertex_i_neighbors) {
       const vertex_j_neighbors = adjacentList[j];
       const commonNeighbors = vertex_i_neighbors.filter(
         (element) => vertex_j_neighbors.indexOf(element) !== -1
       );
-
       var weight = 0;
-      for (var z = 0; z < commonNeighbors.length; z++) {
-        const commonNeighbor = commonNeighbors[z];
-        const v_i = verticesMatrix.getRowVector(i);
-        const v_j = verticesMatrix.getRowVector(j);
-        const v_c = verticesMatrix.getRowVector(commonNeighbor);
+      for (var c of commonNeighbors) {
+        const v_i = verticesMatrix.getRowVector(i).clone();
+        const v_j = verticesMatrix.getRowVector(j).clone();
+        const v_c = verticesMatrix.getRowVector(c).clone();
         const vector1 = v_i.sub(v_c);
         const vector2 = v_j.sub(v_c);
-        const cos_value = vector1
-          .mmul(vector2.transpose())
-          .div(vector1.norm() * vector2.norm())
+        const dotProduct = vector1
+          .clone()
+          .mmul(vector2.clone().transpose())
           .get(0, 0);
-        const cot_value = cos_value / Math.sin(Math.acos(cos_value));
+        const angleInRadians = Math.acos(
+          dotProduct / (vector1.norm() * vector2.norm())
+        );
+        const cot_value = Math.cos(angleInRadians) / Math.sin(angleInRadians);
         weight += 0.5 * cot_value;
       }
-
       weightMatrix.set(i, j, weight);
-      weightMatrix.set(j, i, weight);
     }
   }
+  console.log(weightMatrix);
   return weightMatrix;
 }
 
@@ -232,14 +247,9 @@ function getLaplacianMatrixFromWeightAndAdjacentList(
     const vertex_i_neighbors_id = adjacentList[i];
 
     var vertex_i_weight_sum = 0;
-    for (var j = 0; j < vertex_i_neighbors_id.length; j++) {
-      const neighbor_id = vertex_i_neighbors_id[j];
-      LaplacianMatrix.set(
-        i,
-        neighbor_id,
-        -1 * weightMatrix.get(i, neighbor_id)
-      );
-      vertex_i_weight_sum += weightMatrix.get(i, neighbor_id);
+    for (var j of vertex_i_neighbors_id) {
+      LaplacianMatrix.set(i, j, -1 * weightMatrix.get(i, j));
+      vertex_i_weight_sum += weightMatrix.get(i, j);
     }
     LaplacianMatrix.set(i, i, vertex_i_weight_sum);
   }
