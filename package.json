@@ -5,7 +5,9 @@
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
+    "mathjs": "^11.8.0",
     "ml-matrix": "^6.10.4",
+    "svd-js": "^1.1.1",
     "three": "^0.152.2"
   },
   "scripts": {

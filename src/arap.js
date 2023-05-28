@@ -1,5 +1,5 @@
 import { Matrix, SingularValueDecomposition, determinant } from "ml-matrix";
-
+import { SVD } from "svd-js";
 const mesh_map = new Map();
 const iteration = 3;
 
@@ -34,7 +34,6 @@ export function applyConstraints(constraintsArray) {
       const newRotationMatrix = [];
 
       for (var i = 0; i < iteration; i++) {
-        console.log(i);
         calNewRotationMatrix(mesh_data, newVerticesMatrix, newRotationMatrix);
         calNewVerticesMatrix(
           constraints_for_this_mesh,
@@ -81,20 +80,20 @@ function calNewRotationMatrix(mesh_data, newVerticesMatrix, newRotationMatrix) {
     const D_matrix = Matrix.diag(diag_array);
     const S_matrix = P_matrix.mmul(D_matrix).mmul(P_prime_matrix.transpose());
 
-    const result = new SingularValueDecomposition(S_matrix);
-    const Sigma = result.diagonal;
-    const U = result.leftSingularVectors;
-    const V_T = result.rightSingularVectors;
-    var R = V_T.clone().transpose().mmul(U.clone().transpose());
+    const { u, v, q } = SVD(S_matrix.to2DArray());
+    const U = new Matrix(u);
+    const V = new Matrix(v);
+    var R = V.clone().mmul(U.clone().transpose());
 
     if (determinant(R) < 0) {
       const column = U.getColumnVector(0);
       column.mul(-1);
       U.setColumn(0, column);
     }
-    R = V_T.clone().transpose().mmul(U.clone().transpose());
+    R = V.clone().mmul(U.clone().transpose());
     newRotationMatrix[i] = R;
   }
+  console.log(newRotationMatrix);
 }
 
 function calNewVerticesMatrix(
@@ -149,6 +148,7 @@ function calNewVerticesMatrix(
     bMatrix.setRow(i + vertices_num, constrol_pos);
   }
 
+  console.log(bMatrix);
   const result = new SingularValueDecomposition(
     constraintLaplacianMatrix
   ).solve(bMatrix);
@@ -233,6 +233,7 @@ function getWeightFromVerticesAndNeighbor(verticesMatrix, adjacentList) {
       weightMatrix.set(i, j, weight);
     }
   }
+  console.log("weightMatrix");
   console.log(weightMatrix);
   return weightMatrix;
 }
@@ -253,5 +254,6 @@ function getLaplacianMatrixFromWeightAndAdjacentList(
     }
     LaplacianMatrix.set(i, i, vertex_i_weight_sum);
   }
+  console.log(LaplacianMatrix);
   return LaplacianMatrix;
 }

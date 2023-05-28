@@ -137,7 +137,13 @@ function handleAddConstraint(event) {
       ? firstIntersect.face.b
       : firstIntersect.face.c;
 
-  const r = Math.sqrt(calTriangleArea(v1, v2, v3) / 3.14 / 20);
+  const r = Math.sqrt(
+    calTriangleArea(
+      v1.clone().sub(v2),
+      v2.clone().sub(v3),
+      v3.clone().sub(v1)
+    ) / 3.14
+  );
   const geometry = new THREE.SphereGeometry(r);
   const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
   const sphere = new THREE.Mesh(geometry, material);
@@ -178,6 +184,8 @@ function handleMoveConstraintStop(event) {
   draggableSphere = null;
   draggingPlane = null;
 
+  console.log("constraintsArray");
+  console.log(constraintsArray);
   applyConstraints(constraintsArray);
 }
 
