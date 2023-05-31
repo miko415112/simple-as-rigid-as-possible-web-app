@@ -2,6 +2,7 @@
 <html>
   <head>
     <title>ARAP</title>
+    <link rel="icon" type="image/png" href="icon.jpg" />
   </head>
   <body>
     <div class="container">
@@ -14,8 +15,9 @@
           id="file-upload"
           type="file"
           class="input-file"
-          accept=".txt, .pdf, .doc, .docx"
+          accept=".off,.glb"
         />
+        <br />
         <div class="function-group">
           <div class="switch">
             <input type="checkbox" id="control-switch" />
@@ -24,6 +26,20 @@
               <span class="unchecked">TrackBallControl (False)</span>
             </label>
           </div>
+          <div class="switch">
+            <input type="checkbox" id="draw-switch" />
+            <label for="draw-switch">
+              <span class="checked">Draw (True)</span>
+              <span class="unchecked">Draw (False)</span>
+            </label>
+          </div>
+          <div class="select-wrapper">
+            <select id="draw-mode-select">
+              <option value="mode1">Line</option>
+              <option value="mode2">Point</option>
+            </select>
+          </div>
+          <button id="createButton">Create</button>
           <div class="switch">
             <input type="checkbox" id="constraint-switch" />
             <label for="constraint-switch">
@@ -35,12 +51,17 @@
             <select id="constraint-mode-select">
               <option value="mode1">ADD Constraint</option>
               <option value="mode2">MOVE Constraint</option>
-              <option value="mode3">DELETE Constraint</option>
+              <option value="mode3">
+                MOVE Constraint(instant transformation)
+              </option>
+              <option value="mode4">DELETE Constraint</option>
             </select>
           </div>
-          <button>按鈕1</button>
-          <button>按鈕2</button>
-          <button>按鈕3</button>
+          <button id="transformButton">Transformation</button>
+          <br />
+          <button id="squareButton">Square.off</button>
+          <button id="armadilloButton">Armadillo.off</button>
+          <button id="cactusButton">Cactus.off</button>
         </div>
       </div>
     </div>

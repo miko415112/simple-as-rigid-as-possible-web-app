@@ -1,4 +1,4 @@
-import { Matrix, SingularValueDecomposition, determinant } from "ml-matrix";
+import { Matrix, QrDecomposition, determinant } from "ml-matrix";
 import { SVD } from "svd-js";
 const mesh_map = new Map();
 const iteration = 3;
@@ -93,7 +93,6 @@ function calNewRotationMatrix(mesh_data, newVerticesMatrix, newRotationMatrix) {
     R = V.clone().mmul(U.clone().transpose());
     newRotationMatrix[i] = R;
   }
-  console.log(newRotationMatrix);
 }
 
 function calNewVerticesMatrix(
@@ -148,10 +147,7 @@ function calNewVerticesMatrix(
     bMatrix.setRow(i + vertices_num, constrol_pos);
   }
 
-  console.log(bMatrix);
-  const result = new SingularValueDecomposition(
-    constraintLaplacianMatrix
-  ).solve(bMatrix);
+  const result = new QrDecomposition(constraintLaplacianMatrix).solve(bMatrix);
   for (var i = 0; i < vertices_num; i++) {
     for (var j = 0; j < vertices_num; j++) {
       newVerticesMatrix.set(i, j, result.get(i, j));
@@ -233,8 +229,6 @@ function getWeightFromVerticesAndNeighbor(verticesMatrix, adjacentList) {
       weightMatrix.set(i, j, weight);
     }
   }
-  console.log("weightMatrix");
-  console.log(weightMatrix);
   return weightMatrix;
 }
 
@@ -254,6 +248,5 @@ function getLaplacianMatrixFromWeightAndAdjacentList(
     }
     LaplacianMatrix.set(i, i, vertex_i_weight_sum);
   }
-  console.log(LaplacianMatrix);
   return LaplacianMatrix;
 }
