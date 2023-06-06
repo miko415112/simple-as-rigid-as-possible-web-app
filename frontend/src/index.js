@@ -2,8 +2,8 @@ import "./styles.css";
 import * as THREE from "three";
 import { TrackballControls } from "three/addons/controls/TrackballControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { preprocess, applyConstraints } from "./arap.js";
-import { Constraint } from "./Constraint";
+import { preprocess, applyConstraints, transform } from "./arap.js";
+import { Constraint } from "./constraint";
 import { readOFFFile } from "./offLoader";
 var cdt2d = require("cdt2d");
 
@@ -80,6 +80,11 @@ function linkEvent() {
 
   const createButton = document.getElementById("createButton");
   createButton.addEventListener("click", handleCreate);
+
+  const applyConstraintsButton = document.getElementById(
+    "applyConstraintsButton"
+  );
+  applyConstraintsButton.addEventListener("click", handleApplyConstraints);
 
   const transformButton = document.getElementById("transformButton");
   transformButton.addEventListener("click", handleTransform);
@@ -182,6 +187,7 @@ function handleGlbFile(file) {
   reader.readAsArrayBuffer(file);
 }
 
+/* preloaded files for those who do not have models to upload */
 function handlePublicFile(fileName) {
   fetch(fileName)
     .then((response) => {
@@ -268,6 +274,7 @@ function handleAddConstraint(event) {
 }
 
 function handleMoveConstraintStart(event) {
+  if (constraintsArray.length <= 0) return;
   const raycaster = new THREE.Raycaster();
   raycaster.setFromCamera(getMousePosition(event), camera);
   constraintsArray.sort((c_a, c_b) => {
@@ -362,8 +369,19 @@ function handleDrawStop(event) {
   }
 }
 
-function handleTransform() {
+function handleApplyConstraints() {
+  for (const constraint of constraintsArray) {
+    constraint.setReadyColor();
+  }
   applyConstraints(constraintsArray);
+}
+
+function handleTransform() {
+  try {
+    transform(constraintsArray);
+  } catch (error) {
+    alert(error);
+  }
 }
 
 function handleCreate() {
@@ -411,6 +429,7 @@ function handleCreate() {
   purePoints = [];
   edges = [];
 }
+
 /* utils */
 
 function manualRadioButton(checkboxes) {

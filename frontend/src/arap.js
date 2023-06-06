@@ -23,6 +23,40 @@ export function preprocess(mesh) {
 }
 
 export function applyConstraints(constraintsArray) {
+  mesh_map.forEach((mesh_data, mesh) => {
+    const { verticesMatrix, adjacentList, weightMatrix, LaplacianMatrix } =
+      mesh_data;
+    const constraints_for_this_mesh = constraintsArray.filter((constraint) => {
+      return constraint.control_mesh == mesh ? true : false;
+    });
+    const vertices_num = verticesMatrix.rows;
+    const constraint_num = constraints_for_this_mesh.length;
+    if (constraint_num > 0) {
+      /* sort by constrolIndex */
+      constraints_for_this_mesh.sort((c_a, c_b) => {
+        const index_a = c_a.control_vertexID;
+        const index_b = c_b.control_vertexID;
+        return index_a - index_b;
+      });
+
+      /* cal constraintLaplacianMatrix */
+      const constraintLaplacianMatrix = Matrix.zeros(
+        vertices_num + constraint_num,
+        vertices_num + constraint_num
+      );
+      constraintLaplacianMatrix.setSubMatrix(LaplacianMatrix, 0, 0);
+      for (var i = 0; i < constraint_num; i++) {
+        const controlIndex = constraints_for_this_mesh[i].control_vertexID;
+        constraintLaplacianMatrix.set(vertices_num + i, controlIndex, 1);
+        constraintLaplacianMatrix.set(controlIndex, vertices_num + i, 1);
+      }
+      const QR = new QrDecomposition(constraintLaplacianMatrix);
+      mesh_data.QR = QR;
+    }
+  });
+}
+
+export function transform(constraintsArray) {
   /* iterate each map element(mesh) */
   mesh_map.forEach((mesh_data, mesh) => {
     const constraints_for_this_mesh = constraintsArray.filter((constraint) => {
@@ -30,6 +64,13 @@ export function applyConstraints(constraintsArray) {
     });
 
     if (constraints_for_this_mesh.length > 0) {
+      /* sort by constrolIndex */
+      constraints_for_this_mesh.sort((c_a, c_b) => {
+        const index_a = c_a.control_vertexID;
+        const index_b = c_b.control_vertexID;
+        return index_a - index_b;
+      });
+
       const newVerticesMatrix = mesh_data.verticesMatrix.clone();
       const newRotationMatrix = [];
 
@@ -96,33 +137,15 @@ function calNewRotationMatrix(mesh_data, newVerticesMatrix, newRotationMatrix) {
 }
 
 function calNewVerticesMatrix(
-  constraintArray,
+  constraintsArray,
   mesh_data,
   newVerticesMatrix,
   newRotationMatrix
 ) {
-  const { verticesMatrix, adjacentList, weightMatrix, LaplacianMatrix } =
-    mesh_data;
+  const { verticesMatrix, adjacentList, weightMatrix, QR } = mesh_data;
+  if (!QR) throw Error("please add constraint and apply constraint");
   const vertices_num = verticesMatrix.rows;
-  const constraint_num = constraintArray.length;
-
-  /* cal constraintLaplacianMatrix */
-  const constraintLaplacianMatrix = Matrix.zeros(
-    vertices_num + constraint_num,
-    vertices_num + constraint_num
-  );
-
-  for (var i = 0; i < vertices_num; i++) {
-    for (var j = 0; j < vertices_num; j++) {
-      constraintLaplacianMatrix.set(i, j, LaplacianMatrix.get(i, j));
-    }
-  }
-
-  for (var i = 0; i < constraint_num; i++) {
-    const controlIndex = constraintArray[i].control_vertexID;
-    constraintLaplacianMatrix.set(vertices_num + i, controlIndex, 1);
-    constraintLaplacianMatrix.set(controlIndex, vertices_num + i, 1);
-  }
+  const constraint_num = constraintsArray.length;
 
   /* cal bMatrix */
   const bMatrix = Matrix.zeros(vertices_num + constraint_num, 3);
@@ -143,11 +166,11 @@ function calNewVerticesMatrix(
     bMatrix.setRow(i, b_i_column_vector.transpose());
   }
   for (var i = 0; i < constraint_num; i++) {
-    const constrol_pos = constraintArray[i].getLocalPos();
+    const constrol_pos = constraintsArray[i].getLocalPos();
     bMatrix.setRow(i + vertices_num, constrol_pos);
   }
 
-  const result = new QrDecomposition(constraintLaplacianMatrix).solve(bMatrix);
+  const result = QR.solve(bMatrix);
   for (var i = 0; i < vertices_num; i++) {
     for (var j = 0; j < vertices_num; j++) {
       newVerticesMatrix.set(i, j, result.get(i, j));

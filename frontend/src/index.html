@@ -57,6 +57,7 @@
               <option value="mode4">DELETE Constraint</option>
             </select>
           </div>
+          <button id="applyConstraintsButton">Apply Constraints</button>
           <button id="transformButton">Transformation</button>
           <br />
           <button id="squareButton">Square.off</button>
@@ -65,5 +66,36 @@
         </div>
       </div>
     </div>
+    <h2>Instructions</h2>
+    <h3>1. Add Models</h3>
+    <p>
+      - Click the button in the bottom-right corner to access preloaded .off
+      models.<br />
+      - Generate 2D Mesh by drawing: Click "Draw" to enable drawing mode. Select
+      "Line" and draw lines (When you release the left mouse button, the
+      endpoints will automatically connect). If the shape is wide, you can
+      choose "Point" and add additional vertices in the middle and then press
+      "Create" to create a 2D Mesh.<br />
+      - Upload your own .off file (Note: This feature is not stable and may
+      crash if there are too many triangles).
+    </p>
+
+    <h3>2. Add Control Points</h3>
+    <p>
+      - Click "Edit Constraint" and select "Add". Then, click on the desired
+      control vertex on the model screen .<br />
+      - Click "Apply Constraint" to make the constraint change from red to
+      green, indicating it can be manipulated (this may take some time).
+    </p>
+
+    <h3>3. Move Control Points</h3>
+    <p>
+      - Click "Edit Constraint".<br />
+      - Select "Move" to move the constraint. Moving the constraint will not
+      immediately deform the shape. You can move multiple constraints and then
+      click "Transform".<br />
+      - Select "Move (instant transform)" to instantly transform the shape after
+      moving the constraint.
+    </p>
   </body>
 </html>
